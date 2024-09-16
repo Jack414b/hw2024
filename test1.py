@@ -1,7 +1,7 @@
 from PIL import Image
 import matplotlib.pyplot as plt
 
-#导入图片
+#导入源图片
 image_path = 'jgy.jpg'
 image = Image.open(image_path)
 
