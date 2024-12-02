@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 # 读取预录制的视频文件
-video_file = 'test1.mp4'  # 替换为您的视频文件路径
+video_file = 'wangfan.mp4'  # 替换为您的视频文件路径
 cap = cv2.VideoCapture(video_file)
 
 # 初始化 SIFT 特征检测器
@@ -50,6 +50,9 @@ while True:
 
         # 可视化匹配
         frame_matches = cv2.drawMatches(prev_frame, prev_kp, frame, kp, matches, None)
+        # 创建窗口并设置为小尺寸
+        cv2.namedWindow('Matches', cv2.WINDOW_NORMAL)  # 允许调整窗口大小
+        cv2.resizeWindow('Matches', 800, 600)  # 设置窗口大小为 800x600（根据需要调整）
         cv2.imshow('Matches', frame_matches)
 
     # 更新前一帧
