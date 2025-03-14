@@ -1,61 +1,30 @@
 import cv2
 import numpy as np
+import glob
+# 准备标定板的世界坐标（例如，棋盘格）
+chessboard_size = (11, 8)  # 内部角点数
+square_size = 0.025  # 每个方块的实际尺寸（米）
 
-# 设置棋盘格的尺寸
-chessboard_size = (4, 5)  # 内部角点数
-square_size = 0.025  # 每个方格的实际大小（米）
-
-# 准备对象点
+# 准备对象点和图像点
 objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
 objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2) * square_size
 
-# 存储对象点和图像点
-objpoints = []  # 3D 点
-imgpoints = []  # 2D 点
+obj_points = []  # 3D 点
+img_points = []  # 2D 点
 
-# 读取视频文件
-video_file = 'chessboard.mp4'  # 替换为您的视频文件路径
-cap = cv2.VideoCapture(video_file)
+# 读取标定图像
+images = glob.glob('chess/*.jpg')  # 假设图像格式为 jpg，修改为实际格式
 
-if not cap.isOpened():
-    print("Error: Could not open video.")
-    exit()
-
-frame_count = 0
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-
-    # 每隔一定帧数处理
-    if frame_count % 30 == 0:  # 每30帧提取一次
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # 查找棋盘格角点
-        ret, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
-
-        if ret:
-            objpoints.append(objp)
-            imgpoints.append(corners)
-
-            # 可视化角点
-            cv2.drawChessboardCorners(frame, chessboard_size, corners, ret)
-            cv2.imshow('Chessboard', frame)
-            cv2.waitKey(100)  # 等待100毫秒以查看结果
-        else:
-            print(f"Warning: Corners not found in frame {frame_count}.")  # 打印警告
-
-    frame_count += 1
-
-cap.release()
-cv2.destroyAllWindows()
+for img in images:
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    ret, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
+    if ret:
+        obj_points.append(objp)
+        img_points.append(corners)
 
 # 标定相机
-if len(objpoints) > 0 and len(imgpoints) > 0:  # 确保有足够的点
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
+ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, gray.shape[::-1], None, None)
 
-    # 输出相机内参
-    print("Camera matrix:\n", mtx)
-    print("Distortion coefficients:\n", dist)
-else:
-    print("Error: Not enough points for calibration.")
+# 输出内参
+print("Camera matrix:\n", mtx)
+

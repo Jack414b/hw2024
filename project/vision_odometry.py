@@ -1,8 +1,11 @@
 import cv2
 import numpy as np
+from colorama import Fore, Style, init
 
-# 读取预录制的视频文件
-video_file = 'wangfan.mp4'  # 替换为您的视频文件路径
+init(autoreset=True)
+
+video_file = 'video/distance.mp4'
+output_file = 'matches_output.mp4'
 cap = cv2.VideoCapture(video_file)
 
 # 初始化 SIFT 特征检测器
@@ -11,10 +14,35 @@ prev_kp = None
 prev_des = None
 prev_frame = None
 prev_pose = np.eye(4)  # 初始位姿
-initial_pose = prev_pose.copy()  # 保存初始位姿
+total_distance = 0  # 累加总距离
+initial_pose = prev_pose.copy() 
 
-# 输出初始位姿
-print("Initial Pose:\n", initial_pose)
+# 打印位姿函数
+def print_pose_matrix(pose_matrix):
+    for i in range(4):
+        row = []
+        for j in range(4):
+            # 判断是旋转还是平移
+            if i < 3 and j < 3:
+                row.append(f"{Fore.YELLOW}{pose_matrix[i, j]:+.3e}{Style.RESET_ALL}")
+            elif j == 3 and i < 3:
+                row.append(f"{Fore.BLUE}{pose_matrix[i, j]:+.3e}{Style.RESET_ALL}")
+            else:
+                row.append(f"{pose_matrix[i, j]:+.3e}")
+        print(" | ".join(row))
+
+
+# 获取视频的宽度和高度
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+# 创建 VideoWriter 对象
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 使用 mp4 编码
+out = cv2.VideoWriter(output_file, fourcc, 30, (frame_width, frame_height))
+
+# 输出位姿
+print("Initial Pose:")
+print_pose_matrix(initial_pose)
 
 while True:
     # 读取视频帧
@@ -38,22 +66,33 @@ while True:
         dst_pts = np.float32([kp[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
         # 计算相机位姿
-        E, mask = cv2.findEssentialMat(src_pts, dst_pts, method=cv2.RANSAC, prob=0.999, threshold=1.0)
-        points, R, t, mask = cv2.recoverPose(E, src_pts, dst_pts)
+        E, mask = cv2.findEssentialMat(src_pts, dst_pts, pp=[8.058856128102105e+02,1.286187934232550e+02], method=cv2.RANSAC, prob=0.999, threshold=1.0)
+        if E is not None and mask is not None:
+            points, R, t, mask = cv2.recoverPose(E, src_pts, dst_pts)
+        else:
+            print("无法计算基础矩阵。")
 
         # 更新位姿
         translation = t.flatten()
-        prev_pose = np.dot(prev_pose, np.array([[R[0, 0], R[0, 1], R[0, 2], translation[0]],
+        current_pose = np.dot(prev_pose, np.array([[R[0, 0], R[0, 1], R[0, 2], translation[0]],
                                                  [R[1, 0], R[1, 1], R[1, 2], translation[1]],
                                                  [R[2, 0], R[2, 1], R[2, 2], translation[2]],
                                                  [0, 0, 0, 1]]))
+        initial_pose += current_pose 
 
+        # 计算两帧之间的相机移动距离
+        distance = np.linalg.norm(current_pose[:3, 3])
+        total_distance += distance
+      
         # 可视化匹配
         frame_matches = cv2.drawMatches(prev_frame, prev_kp, frame, kp, matches, None)
         # 创建窗口并设置为小尺寸
-        cv2.namedWindow('Matches', cv2.WINDOW_NORMAL)  # 允许调整窗口大小
-        cv2.resizeWindow('Matches', 800, 600)  # 设置窗口大小为 800x600（根据需要调整）
+        cv2.namedWindow('Matches', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Matches', 800, 600)
         cv2.imshow('Matches', frame_matches)
+
+        # 将可视化的匹配结果写入视频文件
+        out.write(frame_matches)
 
     # 更新前一帧
     prev_frame = frame
@@ -63,17 +102,15 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# 输出结束时的位姿
-print("Final Pose:\n", prev_pose)
+print("Final Pose:")
+print_pose_matrix(initial_pose)
 
-# 计算相机位移距离
-initial_translation = initial_pose[:3, 3]  # 初始位姿的平移部分
-final_translation = prev_pose[:3, 3]  # 最终位姿的平移部分
-distance = np.linalg.norm(final_translation - initial_translation)  # 计算欧几里得距离
+actual_distance = total_distance * 1.9
+# 输出总移动距离
+print("Total camera displacement distance:", total_distance)
+print("Actual distance:", actual_distance, "cm")
 
-print("Camera displacement distance:", distance)
-
+# 释放资源
 cap.release()
+out.release()  # 释放 VideoWriter
 cv2.destroyAllWindows()
-
-
